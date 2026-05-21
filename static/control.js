@@ -81,7 +81,7 @@ const AlignmentManager = {
     // --- Delete ---
     remove_match: function(ppartid, partid) {
         // Remove the match row if it exists.
-        // Add indel rows for both notes.
+        // Add indel rows only if notes have no other matches remaining.
         let found = false;
         for (let i = alignment.rows.length - 1; i >= 0; i--) {
             const row = alignment.rows[i];
@@ -92,14 +92,24 @@ const AlignmentManager = {
         }
         
         if (found) {
-            // Add indel rows for both notes
-            this._add_indel_rows(ppartid, partid);
+            // Check if perf note has other matches
+            const perfHasOtherMatches = this._has_other_matches(ppartid, "perf");
+            // Check if score note has other matches
+            const scoreHasOtherMatches = this._has_other_matches(partid, "score");
+            
+            // Add indel rows only for notes with no remaining matches
+            if (!perfHasOtherMatches) {
+                this._add_insertion_indel(ppartid);
+            }
+            if (!scoreHasOtherMatches) {
+                this._add_deletion_indel(partid);
+            }
         }
     },
     
     remove_all_for_note: function(note_id, note_type) {
         // Remove every match row involving this note.
-        // Add appropriate indel rows.
+        // Add indel rows only for notes that end up with no matches.
         const matches_to_remove = [];
         
         for (let i = alignment.rows.length - 1; i >= 0; i--) {
@@ -113,9 +123,17 @@ const AlignmentManager = {
             }
         }
         
-        // Add indel rows for all removed matches
+        // Add indel rows only for notes that have no other matches
         for (const [pp, pt] of matches_to_remove) {
-            this._add_indel_rows(pp, pt);
+            const perfHasOtherMatches = this._has_other_matches(pp, "perf");
+            const scoreHasOtherMatches = this._has_other_matches(pt, "score");
+            
+            if (!perfHasOtherMatches) {
+                this._add_insertion_indel(pp);
+            }
+            if (!scoreHasOtherMatches) {
+                this._add_deletion_indel(pt);
+            }
         }
     },
 
@@ -224,26 +242,46 @@ const AlignmentManager = {
         }
     },
     
-    _add_indel_rows: function(ppartid, partid) {
-        // Add indel rows for both notes
-        // Insertion in performance
-        const row1 = alignment.addRow();
-        row1.setString('ppartid', ppartid);
-        row1.setString('partid', "undefined");
-        row1.setString('matchtype', "2");
+    _has_other_matches: function(note_id, note_type) {
+        // Check if a note has any other matches remaining
+        for (let i = 0; i < alignment.rows.length; i++) {
+            const row = alignment.rows[i];
+            if (row.arr[1] === "0") {
+                if (note_type === "perf" && row.arr[3] === note_id) {
+                    return true;
+                }
+                if (note_type === "score" && row.arr[2] === note_id) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    },
+    
+    _add_insertion_indel: function(ppartid) {
+        // Add insertion indel (perf note not in score)
+        const row = alignment.addRow();
+        row.setString('ppartid', ppartid);
+        row.setString('partid', "undefined");
+        row.setString('matchtype', "2");
         let last_idx = -1;
         if (alignment.rows.length > 1) {
             last_idx = parseInt(alignment.get(alignment.rows.length-2, "idx"));
         }
-        row1.setString('idx', (last_idx + 1).toString());
-        
-        // Deletion in score
-        const row2 = alignment.addRow();
-        row2.setString('ppartid', "undefined");
-        row2.setString('partid', partid);
-        row2.setString('matchtype', "1");
-        last_idx = parseInt(alignment.get(alignment.rows.length-2, "idx"));
-        row2.setString('idx', (last_idx + 1).toString());
+        row.setString('idx', (last_idx + 1).toString());
+    },
+    
+    _add_deletion_indel: function(partid) {
+        // Add deletion indel (score note not in performance)
+        const row = alignment.addRow();
+        row.setString('ppartid', "undefined");
+        row.setString('partid', partid);
+        row.setString('matchtype', "1");
+        let last_idx = -1;
+        if (alignment.rows.length > 1) {
+            last_idx = parseInt(alignment.get(alignment.rows.length-2, "idx"));
+        }
+        row.setString('idx', (last_idx + 1).toString());
     }
 };
 

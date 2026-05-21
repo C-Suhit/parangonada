@@ -286,7 +286,7 @@ function setup_controls() {
   button_change.mousePressed(change_alignment)
   button_save = createButton('save alignment').parent("info_buttons_alignment");
   button_save.mousePressed(save_alignment);
-  checkbox_many2many = createCheckbox('enable many-to-many alignment (experimental, deletion may not work)', false).parent("info_buttons_alignment");
+  checkbox_many2many = createCheckbox('enable many-to-many alignment', false).parent("info_buttons_alignment");
   button_erase = createButton('erase alignment + empty table (no undo)').parent("info_buttons_alignment");
   button_erase.mousePressed(erase_alignment);
   button_erase = createButton('erase alignment + add indels (no undo)').parent("info_buttons_alignment");
@@ -319,8 +319,6 @@ function setup_controls() {
   createDiv("Use the mouse wheel while pressing 'shift' over score, performance, or center to shift the window").parent("info2");
   createDiv("Use the mouse wheel while pressing 'ctrl' to zoom towards or from the mouse cursor").parent("info2");
 
-
-
   createDiv("_LEGEND_").style('font-size', "28px").parent("legend")
   note_one_div = createDiv('no note clicked').parent("legend");
   note_two_div = createDiv('no note right clicked').parent("legend");
@@ -331,7 +329,6 @@ function setup_controls() {
   createDiv("matched notes in the first alignment, non-aligned in the second (reference). ").style('color',default_colors.match1indel2).parent("legend"); 
   createDiv("matched notes in the second (reference) alignment, non-aligned in the first. ").style('color',default_colors.match2indel1).parent("legend"); 
   
-
   createDiv("_VISUALIZATION_").style('font-size', "28px").parent("control");
   createDiv("SCORE / PERFORMANCE METADATA:").style("font-weight", "bold").style("padding-top", "7px").parent("control")
   //createDiv("____ score and performance metadata _____").parent("control")
