@@ -16,8 +16,8 @@ function NoteRectangle(x, y, xl, yl,
     this.name = name;
     this.pitch = pitch;
     this.spelled_pitch = "";
-    this.linked_note = "";
-    this.zlinked_note = "";
+    this.linked_notes = [];   // Array of partner IDs for primary alignment
+    this.zlinked_notes = [];  // Array of partner IDs for reference alignment
     this.textSIZ = 14;
     this.textSIZ_click = 24;
     this.type = type;
@@ -31,18 +31,21 @@ function NoteRectangle(x, y, xl, yl,
     this.feature_vis = feature_vis;
   
     this.color_code_alignments = function(alpha){
-      if ((this.linked_note == "") && (this.zlinked_note == "")) {
-          
+      const hasLinked = this.linked_notes.length > 0;
+      const hasZLinked = this.zlinked_notes.length > 0;
+      
+      if (!hasLinked && !hasZLinked) {
         this.col = color(default_colors.indel.levels.slice(0,3).concat(alpha)); // default color no alignment (RED)
       }
-      else if (this.linked_note == this.zlinked_note) {
-          
+      else if (hasLinked && hasZLinked && 
+               this.linked_notes.every(id => this.zlinked_notes.includes(id)) &&
+               this.zlinked_notes.every(id => this.linked_notes.includes(id))) {
         this.col = color(default_colors.match.levels.slice(0,3).concat(alpha)); // default color agreement in alignment (BLUE)
       }
-      else if ((this.linked_note == "") && (this.zlinked_note != "")) {
+      else if (!hasLinked && hasZLinked) {
         this.col = color(default_colors.match2indel1.levels.slice(0,3).concat(alpha)); // default color no alignment in new
       }
-      else if ((this.linked_note != "") && (this.zlinked_note == "")) {
+      else if (hasLinked && !hasZLinked) {
         this.col = color(default_colors.match1indel2.levels.slice(0,3).concat(alpha)); // default color no alignment in old (z)
       }
       else {
@@ -51,18 +54,56 @@ function NoteRectangle(x, y, xl, yl,
     }
     
     this.reset = function(){
-      //this.col = color(255,0,0);
-      this.linked_note = "";
+      this.linked_notes = [];
+      this.zlinked_notes = [];
       this.clik = false;
       this.rclik = false;
     }
+    
+    // Helper methods for array-based link management
+    this.add_link = function(partner_id) {
+      if (!this.linked_notes.includes(partner_id)) {
+        this.linked_notes.push(partner_id);
+      }
+    };
+    
+    this.remove_link = function(partner_id) {
+      this.linked_notes = this.linked_notes.filter(id => id !== partner_id);
+    };
+    
+    this.has_link = function(partner_id) {
+      return this.linked_notes.includes(partner_id);
+    };
+    
+    this.clear_links = function() {
+      this.linked_notes = [];
+    };
+    
+    this.add_zlink = function(partner_id) {
+      if (!this.zlinked_notes.includes(partner_id)) {
+        this.zlinked_notes.push(partner_id);
+      }
+    };
+    
+    this.remove_zlink = function(partner_id) {
+      this.zlinked_notes = this.zlinked_notes.filter(id => id !== partner_id);
+    };
+    
+    this.has_zlink = function(partner_id) {
+      return this.zlinked_notes.includes(partner_id);
+    };
+    
+    this.clear_zlinks = function() {
+      this.zlinked_notes = [];
+    };
+    
+    // Legacy methods for backward compatibility (used by existing code)
     this.link = function (linked_note_id){
-      this.linked_note = linked_note_id;
-      //this.col = color(0,0,255,200);
+      this.add_link(linked_note_id);
     }
-  
+
     this.zlink = function (linked_note_id){
-      this.zlinked_note = linked_note_id;
+      this.add_zlink(linked_note_id);
     }
   
     this.display = function(offsets, pitch_text) {
@@ -155,12 +196,16 @@ function NoteRectangle(x, y, xl, yl,
       if(mouseX>=this.x-local_offset && mouseX<this.x+this.xl-local_offset && mouseY>=this.y && mouseY<this.y+this.yl){
       
       this.clik = true;
-          if (this.linked_note != "" && this.type == "score") {
-              perf[this.linked_note].clik = true;  
-          }
-          else if (this.linked_note != "" && this.type == "perf") {
-              score[this.linked_note].clik = true;
-          }
+          // Highlight ALL linked partners (array-based)
+          this.linked_notes.forEach(function(pid) {
+              if (this.type === "score" && perf[pid]) perf[pid].clik = true;
+              if (this.type === "perf" && score[pid]) score[pid].clik = true;
+          }.bind(this));
+          // Also highlight z-linked partners
+          // this.zlinked_notes.forEach(function(pid) {
+          //     if (this.type === "score" && perf[pid]) perf[pid].clik = true;
+          //     if (this.type === "perf" && score[pid]) score[pid].clik = true;
+          // }.bind(this));
       clicked_note = this;
       note_one_div.html("note 1 id::: "+this.name);
       }
@@ -172,12 +217,16 @@ function NoteRectangle(x, y, xl, yl,
         let local_offset = offsets[this.offset_id]-canvaBuffer_offsets[0];
         if(mouseX>=this.x-local_offset && mouseX<this.x+this.xl-local_offset && mouseY>=this.y && mouseY<this.y+this.yl){
       this.rclik = true;
-          if (this.linked_note != "" && this.type == "score") {
-              perf[this.linked_note].rclik = true;  
-          }
-          else if (this.linked_note != "" && this.type == "perf") {
-              score[this.linked_note].rclik = true;
-          }
+          // Highlight ALL linked partners (array-based)
+          this.linked_notes.forEach(function(pid) {
+              if (this.type === "score" && perf[pid]) perf[pid].rclik = true;
+              if (this.type === "perf" && score[pid]) score[pid].rclik = true;
+          }.bind(this));
+          // Also highlight z-linked partners
+          this.zlinked_notes.forEach(function(pid) {
+              if (this.type === "score" && perf[pid]) perf[pid].rclik = true;
+              if (this.type === "perf" && score[pid]) score[pid].rclik = true;
+          }.bind(this));
       right_clicked_note = this;
       note_two_div.html("note 2 id::: "+this.name);
       }

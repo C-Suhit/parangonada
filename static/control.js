@@ -1,5 +1,324 @@
 
 
+//________________- AlignmentManager - Centralized Alignment CRUD -__________________________
+
+const AlignmentManager = {
+    // --- Read ---
+    get_partners: function(note_id, note_type) {
+        // Returns array of partner IDs for a given note from the primary alignment
+        // note_type: "perf" or "score"
+        const partners = [];
+        for (let i = 0; i < alignment.rows.length; i++) {
+            const row = alignment.rows[i];
+            if (row.arr[1] === "0") { // matchtype === "0"
+                if (note_type === "perf" && row.arr[3] === note_id) {
+                    partners.push(row.arr[2]); // partid
+                } else if (note_type === "score" && row.arr[2] === note_id) {
+                    partners.push(row.arr[3]); // ppartid
+                }
+            }
+        }
+        return partners;
+    },
+    
+    get_zpartners: function(note_id, note_type) {
+        // Same for the reference (z) alignment
+        const partners = [];
+        for (let i = 0; i < zalignment.rows.length; i++) {
+            const row = zalignment.rows[i];
+            if (row.arr[1] === "0") { // matchtype === "0"
+                if (note_type === "perf" && row.arr[3] === note_id) {
+                    partners.push(row.arr[2]); // partid
+                } else if (note_type === "score" && row.arr[2] === note_id) {
+                    partners.push(row.arr[3]); // ppartid
+                }
+            }
+        }
+        return partners;
+    },
+    
+    get_all_matches: function() {
+        // Returns all (ppartid, partid) pairs where matchtype === "0"
+        const matches = [];
+        for (let i = 0; i < alignment.rows.length; i++) {
+            const row = alignment.rows[i];
+            if (row.arr[1] === "0") {
+                matches.push([row.arr[3], row.arr[2]]); // [ppartid, partid]
+            }
+        }
+        return matches;
+    },
+
+    // --- Create (idempotent) ---
+    add_match: function(ppartid, partid) {
+        // If (ppartid, partid) already exists with matchtype "0", do nothing.
+        // Otherwise add a row with matchtype "0".
+        // Remove any existing indel rows for ppartid or partid.
+        
+        // Check if match already exists
+        for (let i = 0; i < alignment.rows.length; i++) {
+            const row = alignment.rows[i];
+            if (row.arr[1] === "0" && row.arr[3] === ppartid && row.arr[2] === partid) {
+                return; // Already exists, idempotent no-op
+            }
+        }
+        
+        // Remove any indel rows for these notes
+        this._remove_indels_for_notes(ppartid, partid);
+        
+        // Add the match row
+        const newRow = alignment.addRow();
+        newRow.setString('ppartid', ppartid);
+        newRow.setString('partid', partid);
+        newRow.setString('matchtype', "0");
+        let last_idx = -1;
+        if (alignment.rows.length > 1) {
+            last_idx = parseInt(alignment.get(alignment.rows.length-2, "idx"));
+        }
+        newRow.setString('idx', (last_idx + 1).toString());
+    },
+
+    // --- Delete ---
+    remove_match: function(ppartid, partid) {
+        // Remove the match row if it exists.
+        // Add indel rows only if notes have no other matches remaining.
+        let found = false;
+        for (let i = alignment.rows.length - 1; i >= 0; i--) {
+            const row = alignment.rows[i];
+            if (row.arr[1] === "0" && row.arr[3] === ppartid && row.arr[2] === partid) {
+                alignment.removeRow(i);
+                found = true;
+            }
+        }
+        
+        if (found) {
+            // Check if perf note has other matches
+            const perfHasOtherMatches = this._has_other_matches(ppartid, "perf");
+            // Check if score note has other matches
+            const scoreHasOtherMatches = this._has_other_matches(partid, "score");
+            
+            // Add indel rows only for notes with no remaining matches
+            if (!perfHasOtherMatches) {
+                this._add_insertion_indel(ppartid);
+            }
+            if (!scoreHasOtherMatches) {
+                this._add_deletion_indel(partid);
+            }
+        }
+    },
+    
+    remove_all_for_note: function(note_id, note_type) {
+        // Remove every match row involving this note.
+        // Add indel rows only for notes that end up with no matches.
+        const matches_to_remove = [];
+        
+        for (let i = alignment.rows.length - 1; i >= 0; i--) {
+            const row = alignment.rows[i];
+            if (row.arr[1] === "0") {
+                if ((note_type === "perf" && row.arr[3] === note_id) ||
+                    (note_type === "score" && row.arr[2] === note_id)) {
+                    matches_to_remove.push([row.arr[3], row.arr[2]]);
+                    alignment.removeRow(i);
+                }
+            }
+        }
+        
+        // Add indel rows only for notes that have no other matches
+        for (const [pp, pt] of matches_to_remove) {
+            const perfHasOtherMatches = this._has_other_matches(pp, "perf");
+            const scoreHasOtherMatches = this._has_other_matches(pt, "score");
+            
+            if (!perfHasOtherMatches) {
+                this._add_insertion_indel(pp);
+            }
+            if (!scoreHasOtherMatches) {
+                this._add_deletion_indel(pt);
+            }
+        }
+    },
+
+    // --- Rebuild views ---
+    rebuild_lines: function() {
+        // Clear and rebuild `lines` from the current alignment table.
+        // Also updates `linked_notes` on all NoteRectangle instances.
+        lines = {};
+        
+        // Clear all links on notes
+        for (var i = 0; i < notes.length; i++) {
+            notes[i].clear_links();
+        }
+        
+        // Rebuild from alignment table
+        for (let i = 0; i < alignment.rows.length; i++) {
+            const row = alignment.rows[i];
+            if (row.arr[1] === "0") { // matchtype === "0"
+                const ppartid = row.arr[3];
+                const partid = row.arr[2];
+                
+                if (ppartid in perf && partid in score) {
+                    const ppartnote = perf[ppartid];
+                    const partnote = score[partid];
+                    
+                    ppartnote.add_link(partid);
+                    partnote.add_link(ppartid);
+                    
+                    const line_key = `${partid}_${ppartid}`;
+                    lines[line_key] = new NoteLine(
+                        partnote.x, partnote.y,
+                        ppartnote.x, ppartnote.y,
+                        ppartid, partid, false
+                    );
+                }
+            }
+        }
+    },
+    
+    rebuild_zlines: function() {
+        // Same for `zlines` and `zlinked_notes`.
+        zlines = {};
+        
+        // Clear all z-links on notes
+        for (var i = 0; i < notes.length; i++) {
+            notes[i].clear_zlinks();
+        }
+        
+        // Rebuild from zalignment table
+        for (let i = 0; i < zalignment.rows.length; i++) {
+            const row = zalignment.rows[i];
+            if (row.arr[1] === "0") { // matchtype === "0"
+                const ppartid = row.arr[3];
+                const partid = row.arr[2];
+                
+                if (ppartid in perf && partid in score) {
+                    const ppartnote = perf[ppartid];
+                    const partnote = score[partid];
+                    
+                    ppartnote.add_zlink(partid);
+                    partnote.add_zlink(ppartid);
+                    
+                    const line_key = `${partid}_${ppartid}`;
+                    zlines[line_key] = new NoteLine(
+                        partnote.x, partnote.y,
+                        ppartnote.x, ppartnote.y,
+                        ppartid, partid, true
+                    );
+                }
+            }
+        }
+    },
+
+    // --- Table utilities ---
+    find_rows: function(note_id, column_name) {
+        // Returns ALL matching rows (not just the first).
+        const results = [];
+        for (let i = 0; i < alignment.rows.length; i++) {
+            if (alignment.rows[i].obj[column_name] === note_id) {
+                results.push([alignment.rows[i], i]);
+            }
+        }
+        return results;
+    },
+    
+    remove_all_rows: function(note_id, column_name) {
+        // Removes every row matching note_id in column_name.
+        for (let i = alignment.rows.length - 1; i >= 0; i--) {
+            if (alignment.rows[i].obj[column_name] === note_id) {
+                alignment.removeRow(i);
+            }
+        }
+    },
+    
+    // --- Private helpers ---
+    _remove_indels_for_notes: function(ppartid, partid) {
+        // Remove any indel rows for these notes
+        console.log("remove indel lines for", ppartid, partid)
+        for (let i = alignment.rows.length - 1; i >= 0; i--) {
+            const row = alignment.rows[i];
+            if (row.arr[1] === "1" || row.arr[1] === "2") {
+                if (row.arr[2] === partid || row.arr[3] === ppartid) {
+                    alignment.removeRow(i);
+                }
+            }
+        }
+    },
+    
+    _has_other_matches: function(note_id, note_type) {
+        // Check if a note has any other matches remaining
+        for (let i = 0; i < alignment.rows.length; i++) {
+            const row = alignment.rows[i];
+            if (row.arr[1] === "0") {
+                if (note_type === "perf" && row.arr[3] === note_id) {
+                    return true;
+                }
+                if (note_type === "score" && row.arr[2] === note_id) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    },
+    
+    _add_insertion_indel: function(ppartid) {
+        // Add insertion indel (perf note not in score)
+        const row = alignment.addRow();
+        row.setString('ppartid', ppartid);
+        row.setString('partid', "undefined");
+        row.setString('matchtype', "2");
+        let last_idx = -1;
+        if (alignment.rows.length > 1) {
+            last_idx = parseInt(alignment.get(alignment.rows.length-2, "idx"));
+        }
+        row.setString('idx', (last_idx + 1).toString());
+    },
+    
+    _add_deletion_indel: function(partid) {
+        // Add deletion indel (score note not in performance)
+        const row = alignment.addRow();
+        row.setString('ppartid', "undefined");
+        row.setString('partid', partid);
+        row.setString('matchtype', "1");
+        let last_idx = -1;
+        if (alignment.rows.length > 1) {
+            last_idx = parseInt(alignment.get(alignment.rows.length-2, "idx"));
+        }
+        row.setString('idx', (last_idx + 1).toString());
+    }
+};
+
+//________________- Selection State -__________________________
+
+const Selection = {
+    mode: "single",   // "single" | "pair" | "region"
+    left_note:  null,  // NoteRectangle or null
+    right_note: null,  // NoteRectangle or null
+    region:    null,   // { type, x_start, x_end, y_start, y_end } or null
+
+    clear: function() {
+        this.mode = "single";
+        this.left_note = this.right_note = this.region = null;
+    },
+
+    has_selection: function() {
+        return this.left_note !== null || this.region !== null;
+    },
+
+    has_pair: function() {
+        return this.left_note !== null && this.right_note !== null;
+    },
+    
+    set_left: function(note) {
+        this.left_note = note;
+        this.mode = "single";
+    },
+    
+    set_right: function(note) {
+        this.right_note = note;
+        if (this.left_note) {
+            this.mode = "pair";
+        }
+    }
+};
+
 //________________- Keyboard Input -__________________________
 
 function keyTyped() {
@@ -64,6 +383,7 @@ function checknoteclicked() {
           notes[i].clicked(position.offsets());
         
           }
+          console.log(clicked_note);
         }
         if (mouseButton === RIGHT) {
           right_clicked_note=null;
@@ -87,7 +407,7 @@ function checknoteclicked() {
           notes[i].right_rebase();
           }
         }
-      
+        
       
         
         if (right_clicked_note && clicked_note) {
@@ -271,15 +591,12 @@ function change_alignment_many() {
       score_still = clicked_note.name;
     }
 
-    // Link the notes
-    score[score_still].link(perf_still);
-    perf[perf_still].link(score_still);
-    let line_key = `${score_still}_${perf_still}`;
-    lines[line_key] = new NoteLine(score[score_still].x, score[score_still].y,
-                                   perf[perf_still].x, perf[perf_still].y, perf_still, score_still, false);
-
-    // Add new alignment to the table
-    customAddRowAlignment(perf_still, score_still, "0");
+    // Use AlignmentManager for idempotent add
+    AlignmentManager.add_match(perf_still, score_still);
+    
+    // Rebuild lines to ensure consistency
+    AlignmentManager.rebuild_lines();
+    
     click_cleanup();
   } else {
     alert("mark two notes for alignment...");
@@ -288,58 +605,33 @@ function change_alignment_many() {
 
 function change_alignment_one() {
   if (clicked_note && right_clicked_note){
-  let perf_still;
-  let score_nomore;
-  let score_still;
-  let perf_nomore;
-  if (clicked_note.type == "perf")
-  {
+    let perf_still;
+    let score_still;
+    
+    if (clicked_note.type == "perf") {
       perf_still = clicked_note.name;
-      score_nomore =  clicked_note.linked_note;
       score_still = right_clicked_note.name;
-      perf_nomore =  right_clicked_note.linked_note;
-  }
-  else{
+    } else {
       perf_still = right_clicked_note.name;
-      score_nomore =  right_clicked_note.linked_note;
       score_still = clicked_note.name;
-      perf_nomore =  clicked_note.linked_note;
-  }
+    }
 
-  // reset the notes
-  score[score_still].reset();
-  perf[perf_still].reset();
-  score[score_still].link(perf_still);
-  perf[perf_still].link(score_still);
-  let line_key_ssps = `${score_still}_${perf_still}`;
-  lines[line_key_ssps] = new NoteLine(score[score_still].x,score[score_still].y,
-                                              perf[perf_still].x,perf[perf_still].y, perf_still, score_still, false);
-  
-  customRemoveRow(perf_still, "ppartid",alignment);
-  customRemoveRow(score_still, "partid",alignment);
-  customAddRowAlignment(perf_still, score_still, "0");
-  if (perf_nomore != "") {
-    // reset the note
-    perf[perf_nomore].reset();
-    // delete the line
-    let line_key_sspn = `${score_still}_${perf_nomore}`;
-    delete lines[line_key_sspn] ;
-    // add insertion
-    customAddRowAlignment(perf_nomore, "undefined", "2");
-  } else if (score_nomore != ""){
-    // reset the note
-    score[score_nomore].reset();
-    // delete the line
-    let line_key_snps = `${score_nomore}_${perf_still}`;
-    delete lines[line_key_snps] ;
-    // add deletion
-    customAddRowAlignment("undefined", score_nomore, "1");
-  } 
-  click_cleanup();
-}
-else {
-  alert("mark two notes for alignment.");
-}
+    // Use AlignmentManager for the operation
+    // First, remove all existing matches for both notes (one-to-one mode)
+    AlignmentManager.remove_all_for_note(perf_still, "perf");
+    AlignmentManager.remove_all_for_note(score_still, "score");
+    
+    // Then add the new match
+    AlignmentManager.add_match(perf_still, score_still);
+    
+    // Rebuild lines to ensure consistency
+    AlignmentManager.rebuild_lines();
+    
+    click_cleanup();
+  }
+  else {
+    alert("mark two notes for alignment.");
+  }
 }
 
 function customFindRow (value, column, table) {
@@ -386,19 +678,6 @@ function erase_alignment() {
   redraw();
 }
 
-function erase_alignment() {
-  alignment.clearRows();
-  lines = {};
-  zlines = {};
-  for(var i = 0; i < notes.length; i++){
-    notes[i].reset();
-    notes[i].rebase();
-    notes[i].right_rebase();
-  }
-  canvabuffer_draw();
-  redraw();
-}
-
 
 function erase_alignment_indel() {
   alignment.clearRows();
@@ -425,9 +704,23 @@ function erase_alignment_indel() {
 function delete_alignment() {
   // check if something is clicked
   if (clicked_note || right_clicked_note){
-    // check if only one is clicked
+    // NEW: Support pair deletion
     if (clicked_note && right_clicked_note) {
-      alert("click only one note to delete its alignment");
+      // Delete the alignment between the two marked notes
+      let perf_id, score_id;
+      
+      if (clicked_note.type == "perf") {
+        perf_id = clicked_note.name;
+        score_id = right_clicked_note.name;
+      } else {
+        perf_id = right_clicked_note.name;
+        score_id = clicked_note.name;
+      }
+      
+      // Use AlignmentManager to remove the specific match
+      AlignmentManager.remove_match(perf_id, score_id);
+      AlignmentManager.rebuild_lines();
+      click_cleanup();
     }
     else {
       let clicked_note_neutral = null;
@@ -438,42 +731,19 @@ function delete_alignment() {
         clicked_note_neutral = right_clicked_note
       }
       
-      // check if there is an alignment
-      if (clicked_note_neutral.linked_note =="") {
+      // check if there is an alignment (fixed: use === instead of ==)
+      if (clicked_note_neutral.linked_notes.length === 0) {
         alert("click a note with existing alignment to delete the alignment")
       }
-
-
-
       else {
-        // now do the deleting
-        let score_nomore;
-        let perf_nomore;
-        if (clicked_note_neutral.type == "perf")
-        {
-            score_nomore =  clicked_note_neutral.linked_note;
-            perf_nomore =  clicked_note_neutral.name;
+        // Delete all alignments for this note
+        if (clicked_note_neutral.type == "perf") {
+          AlignmentManager.remove_all_for_note(clicked_note_neutral.name, "perf");
+        } else {
+          AlignmentManager.remove_all_for_note(clicked_note_neutral.name, "score");
         }
-        else{
-            score_nomore =  clicked_note_neutral.name;
-            perf_nomore =  clicked_note_neutral.linked_note;
-        }
-          // remove row
-          customRemoveRow(perf_nomore,"ppartid",alignment);
-          // reset the notes
-          score[score_nomore].reset();
-          perf[perf_nomore].reset();
-          // delete the line
-          let line_key_snpn = `${score_nomore}_${perf_nomore}`;
-          delete lines[line_key_snpn] ;
-          // add deletion
-          customAddRowAlignment("undefined", score_nomore, "1");
-          // add insertion
-          customAddRowAlignment(perf_nomore, "undefined", "2");
-        
-
+        AlignmentManager.rebuild_lines();
         click_cleanup();
-
       }
     }
   }
