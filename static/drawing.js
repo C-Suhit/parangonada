@@ -178,8 +178,9 @@ function lines_from_matchl () {
     partnote = score[partid];
     ppartnote = perf[ppartid];
     //print(partnote, partid,  ppartnote, ppartid)
-    partnote.link(ppartid); 
-    ppartnote.link(partid);
+    // Use add_link for array-based link management
+    partnote.add_link(ppartid); 
+    ppartnote.add_link(partid);
     line_key = `${partid}_${ppartid}`;
     lines[line_key] = new NoteLine(partnote.x,partnote.y,ppartnote.x,ppartnote.y, ppartid, partid, false);
   };
@@ -201,8 +202,9 @@ function zlines_from_zmatchl () {
       partnote = score[partid];
       ppartnote = perf[ppartid];
       //print(partnote, partid,  ppartnote, ppartid)
-      partnote.zlink(ppartid); 
-      ppartnote.zlink(partid);
+      // Use add_zlink for array-based link management
+      partnote.add_zlink(ppartid); 
+      ppartnote.add_zlink(partid);
       line_key = `${partid}_${ppartid}`;
       zlines[line_key] = new NoteLine(partnote.x,partnote.y,ppartnote.x,ppartnote.y, ppartid, partid, true);
     }
