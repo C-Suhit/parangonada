@@ -1,5 +1,13 @@
 
 
+//________________- Zoom Throttle State -__________________________
+// Throttles setup_score_and_performance() during Ctrl+wheel zoom to at most once every 500 ms.
+// Position values are still updated on every wheel event so the zoom math stays responsive;
+// only the heavy redraw (setup_the_pianorolls + compute_piano_roll_display_elements + …)
+// is rate-limited.
+var _zoom_last_update_ms = 0;
+const ZOOM_UPDATE_INTERVAL_MS = 50;
+
 //________________- AlignmentManager - Centralized Alignment CRUD -__________________________
 
 const AlignmentManager = {
@@ -465,24 +473,35 @@ function mouseWheel(event) {
       event.preventDefault()
 
       let mouse_from_left = mouseX - canvaBuffer_offsets[0];
-      let current_pixel_per_sec = position.pixel_per_sec;
-      let current_pixel_offset = position.offset_performance;
-      position.pixel_per_sec += event.delta/2040*position.pixel_per_sec; // change by 10 percent
-      position.pixel_per_sec = min(max(position.pixel_per_sec, 5), 5000)
-      position.offset_performance = (mouse_from_left + current_pixel_offset)*
-                                    (position.pixel_per_sec/current_pixel_per_sec)
-                                    - mouse_from_left;
-      position.previous_offset_performance = position.offset_performance
-      position.starthead = (position.offset_performance+100)/position.pixel_per_sec + start;
-      position.increment(0, false, false, false, true);
-      //let current_pixel_per_beat = position.pixel_per_beat;
-      let current_pixel_offset_score = position.offset_score;
-      //position.pixel_per_beat *= position.pixel_per_sec/current_pixel_per_sec;
-      position.offset_score = (mouse_from_left + current_pixel_offset_score)*
-                                    (position.pixel_per_sec/current_pixel_per_sec)
-                                    - mouse_from_left;
-      position.previous_offset_score = position.offset_score 
-      setup_score_and_performance();
+       let current_pixel_per_sec = position.pixel_per_sec;
+       let current_pixel_offset = position.offset_performance;
+       position.pixel_per_sec += event.delta/1020*position.pixel_per_sec; // change by 10 percent
+       position.pixel_per_sec = min(max(position.pixel_per_sec, 5), 5000)
+       //print(position.pixel_per_sec, mouse_from_left, position)
+       position.offset_performance = (mouse_from_left + current_pixel_offset)*
+                                     (position.pixel_per_sec/current_pixel_per_sec)
+                                     - mouse_from_left;
+       position.previous_offset_performance = position.offset_performance
+       position.starthead = (position.offset_performance+100)/position.pixel_per_sec + start;
+       position.increment(0, false, false, false, true);
+       //let current_pixel_per_beat = position.pixel_per_beat;
+       let current_pixel_offset_score = position.offset_score;
+       //position.pixel_per_beat *= position.pixel_per_sec/current_pixel_per_sec;
+       position.offset_score = (mouse_from_left + current_pixel_offset_score)*
+                                     (position.pixel_per_sec/current_pixel_per_sec)
+                                     - mouse_from_left;
+       position.previous_offset_score = position.offset_score
+
+       // Update width and canvas size for normalized coordinates
+       compute_global_sizing();
+
+       // --- Throttled zoom redraw (at most once every ZOOM_UPDATE_INTERVAL_MS) ---
+      var now = performance.now();
+      if (now - _zoom_last_update_ms >= ZOOM_UPDATE_INTERVAL_MS) {
+        _zoom_last_update_ms = now;
+        canvabuffer_draw();
+        redraw();
+      }
       
     } else if (event.shiftKey) {
       event.preventDefault()

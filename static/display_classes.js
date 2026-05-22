@@ -107,9 +107,12 @@ function NoteRectangle(x, y, xl, yl,
     }
   
     this.display = function(offsets, pitch_text) {
+        // Compute pixel position and width from normalized values
+        let pixel_x = this.x * width - offsets[this.offset_id];
+        let pixel_xl = this.xl * width;
 
-        let within_canvas = (this.x+this.xl-offsets[this.offset_id]>= 0) && 
-        (this.x-offsets[this.offset_id]< canvaBuffer.width);
+        let within_canvas = (pixel_x + pixel_xl >= 0) && 
+        (pixel_x < canvaBuffer.width);
         if (within_canvas) {
         
         canvaBuffer.push();
@@ -131,11 +134,11 @@ function NoteRectangle(x, y, xl, yl,
         canvaBuffer.textSize(this.textSIZ);
         canvaBuffer.fill(this.col);
       }
-        canvaBuffer.rect(this.x-offsets[this.offset_id], this.y, this.xl, this.yl);
+        canvaBuffer.rect(pixel_x, this.y, pixel_xl, this.yl);
         if (pitch_text) {
-          canvaBuffer.text(this.spelled_pitch, this.x-offsets[this.offset_id],this.y-1);
+          canvaBuffer.text(this.spelled_pitch, pixel_x,this.y-1);
         } else {
-          canvaBuffer.text(this.name, this.x-offsets[this.offset_id],this.y-1);
+          canvaBuffer.text(this.name, pixel_x,this.y-1);
         }
         
         canvaBuffer.pop();
@@ -144,6 +147,7 @@ function NoteRectangle(x, y, xl, yl,
     this.feature_display_tim = function(offsets) {
       if (this.tim) {
         // timing: the higher the value the earlier the note (more to left)
+        let pixel_x = this.x * width - offsets[this.offset_id];
         canvaBuffer.push();
         canvaBuffer.fill(0,0,0,0);
         canvaBuffer.strokeWeight(2);
@@ -153,27 +157,31 @@ function NoteRectangle(x, y, xl, yl,
         } else {
           canvaBuffer.stroke(color(240,10,10,200))
         }
-        canvaBuffer.line(this.x-offsets[this.offset_id],this.y,this.x-offsets[this.offset_id]-this.tim*this.feature_vis, this.y)
-        canvaBuffer.circle(this.x-offsets[this.offset_id]-this.tim*this.feature_vis, this.y, 10);
+        canvaBuffer.line(pixel_x,this.y,pixel_x-this.tim*this.feature_vis, this.y)
+        canvaBuffer.circle(pixel_x-this.tim*this.feature_vis, this.y, 10);
         canvaBuffer.pop();
       }
     };
     this.feature_display_art = function(offsets) {
       if (this.art) {
         // articulation: the higher the value the more staccato the note (= -log(ratio), more to the left)
+        let pixel_x = this.x * width - offsets[this.offset_id];
+        let pixel_xl = this.xl * width;
         canvaBuffer.push();
         canvaBuffer.strokeWeight(2);
         canvaBuffer.fill(0,0,0,0);
         canvaBuffer.stroke(this.col_line1)
-        canvaBuffer.line(this.x-offsets[this.offset_id]+this.xl,this.y+this.yl,
-                        this.x-offsets[this.offset_id]+this.xl+this.art*this.feature_vis, this.y+this.yl)
-        canvaBuffer.circle(this.x-offsets[this.offset_id]+this.xl+this.art*this.feature_vis, this.y+this.yl, 10);
+        canvaBuffer.line(pixel_x+pixel_xl,this.y+this.yl,
+                        pixel_x+pixel_xl+this.art*this.feature_vis, this.y+this.yl)
+        canvaBuffer.circle(pixel_x+pixel_xl+this.art*this.feature_vis, this.y+this.yl, 10);
         canvaBuffer.pop();
       }
     };
     this.feature_display_vel = function(offsets) {
       if (this.vel) {
         // velocity: the higher the value the louder the note (more upwards)
+        let pixel_x = this.x * width - offsets[this.offset_id];
+        let pixel_xl = this.xl * width;
         canvaBuffer.push();
         canvaBuffer.strokeWeight(2);
         canvaBuffer.fill(0,0,0,0);
@@ -184,16 +192,18 @@ function NoteRectangle(x, y, xl, yl,
           canvaBuffer.stroke(color(240,10,10,200))
         }*/
         
-        canvaBuffer.line(this.x-offsets[this.offset_id]+this.xl/2,this.y,this.x-offsets[this.offset_id]+this.xl/2, this.y-this.vel*this.feature_vis)
-        canvaBuffer.circle(this.x-offsets[this.offset_id]+this.xl/2, this.y-this.vel*this.feature_vis, 10);
+        canvaBuffer.line(pixel_x+pixel_xl/2,this.y,pixel_x+pixel_xl/2, this.y-this.vel*this.feature_vis)
+        canvaBuffer.circle(pixel_x+pixel_xl/2, this.y-this.vel*this.feature_vis, 10);
         canvaBuffer.pop();
       }
     };
   
     this.clicked = function(offsets) {
         let local_offset = offsets[this.offset_id]-canvaBuffer_offsets[0];
+        let pixel_x = this.x * width - local_offset;
+        let pixel_xl = this.xl * width;
         
-      if(mouseX>=this.x-local_offset && mouseX<this.x+this.xl-local_offset && mouseY>=this.y && mouseY<this.y+this.yl){
+      if(mouseX>=pixel_x && mouseX<pixel_x+pixel_xl && mouseY>=this.y && mouseY<this.y+this.yl){
       
       this.clik = true;
           // Highlight ALL linked partners (array-based)
@@ -215,7 +225,9 @@ function NoteRectangle(x, y, xl, yl,
   
     this.right_clicked = function(offsets) {
         let local_offset = offsets[this.offset_id]-canvaBuffer_offsets[0];
-        if(mouseX>=this.x-local_offset && mouseX<this.x+this.xl-local_offset && mouseY>=this.y && mouseY<this.y+this.yl){
+        let pixel_x = this.x * width - local_offset;
+        let pixel_xl = this.xl * width;
+        if(mouseX>=pixel_x && mouseX<pixel_x+pixel_xl && mouseY>=this.y && mouseY<this.y+this.yl){
       this.rclik = true;
           // Highlight ALL linked partners (array-based)
           this.linked_notes.forEach(function(pid) {
@@ -263,10 +275,14 @@ function NoteRectangle(x, y, xl, yl,
     
     
     this.display = function(offsets) {
+      let x1 = score[this.scorenote].x * width - offsets[1];  // score offset
+      let y1 = score[this.scorenote].y;
+      let x2 = perf[this.perfnote].x * width - offsets[0];    // perf offset
+      let y2 = perf[this.perfnote].y;
       canvaBuffer.push();
       canvaBuffer.stroke(this.col);
       canvaBuffer.strokeWeight(this.wei);
-      canvaBuffer.line(score[this.scorenote].x-position.offset_score,score[this.scorenote].y, perf[this.perfnote].x-position.offset_performance,perf[this.perfnote].y);
+      canvaBuffer.line(x1, y1, x2, y2);
       canvaBuffer.pop();
     };
   

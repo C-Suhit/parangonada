@@ -69,26 +69,26 @@ function compute_piano_roll_display_elements() {
       score = {};
       
       //console.log("creating Note Rectangles for performance");
-      // generate new NoteRectangles for the performance
-      for (let r = 0; r < notearray.length; r++){
-        let xx = (notearray[r][1]-start)/dur*width;
-        let yy = (canvaHeight-100)/2-(notearray[r][2]-pitchmin+1)*incrementy;
-        let xe = notearray[r][0]/dur*width;
-        let ye = incrementy;
-    
-        perf[notearray[r][3]] = new NoteRectangle(xx,yy,xe,ye, notearray[r][3], "perf", notearray[r][2]);
-        notes.push(perf[notearray[r][3]]);    
-      }
-      //console.log("creating Note Rectangles for score");
-      // generate new NoteRectangles for the score
-      for (let r = 0; r < notearraypart.length; r++){
-        let xxp = (notearraypart[r][1]-startpart)/durpart*width;
-        let yyp = canvaHeight-(notearraypart[r][2]-pitchminpart+1)*incrementypart;
-        let xep = notearraypart[r][0]/durpart*width;
-        let yep = incrementypart;
-        score[notearraypart[r][3]] = new NoteRectangle(xxp,yyp,xep,yep, notearraypart[r][3], "score", parseInt(notearraypart[r][2]));
-        notes.push(score[notearraypart[r][3]]);
-      }
+       // generate new NoteRectangles for the performance
+       for (let r = 0; r < notearray.length; r++){
+         let xx = (notearray[r][1]-start)/dur;  // normalized position (0-1)
+         let yy = (canvaHeight-100)/2-(notearray[r][2]-pitchmin+1)*incrementy;
+         let xe = notearray[r][0]/dur;           // normalized width (0-1)
+         let ye = incrementy;
+     
+         perf[notearray[r][3]] = new NoteRectangle(xx,yy,xe,ye, notearray[r][3], "perf", notearray[r][2]);
+         notes.push(perf[notearray[r][3]]);    
+       }
+       //console.log("creating Note Rectangles for score");
+       // generate new NoteRectangles for the score
+       for (let r = 0; r < notearraypart.length; r++){
+         let xxp = (notearraypart[r][1]-startpart)/durpart;  // normalized position
+         let yyp = canvaHeight-(notearraypart[r][2]-pitchminpart+1)*incrementypart;
+         let xep = notearraypart[r][0]/durpart;               // normalized width
+         let yep = incrementypart;
+         score[notearraypart[r][3]] = new NoteRectangle(xxp,yyp,xep,yep, notearraypart[r][3], "score", parseInt(notearraypart[r][2]));
+         notes.push(score[notearraypart[r][3]]);
+       }
 
 
         // generate lines
@@ -225,7 +225,7 @@ function generate_keyblocks() {
       if (p%12==key) {
         let xx = 0;
         let yy = (canvaHeight-100)/2-(p-pitchmin+1)*incrementy;
-        let xe = canvaBuffer.width;
+        let xe = 1;  // normalized width (full width)
         let ye = incrementy;
         let keyblock = new NoteRectangle(xx,yy,xe,ye, "tonic", "perf");
         keyblock.col = default_colors.keyblock_tonic;
@@ -234,7 +234,7 @@ function generate_keyblocks() {
       if (p%12==(key+7)%12) {
         let xx = 0;
         let yy = (canvaHeight-100)/2-(p-pitchmin+1)*incrementy;
-        let xe = canvaBuffer.width;
+        let xe = 1;  // normalized width (full width)
         let ye = incrementy;
         let keyblock = new NoteRectangle(xx,yy,xe,ye, "fifth", "perf");
         keyblock.col = default_colors.keyblock_fifth;
@@ -246,7 +246,7 @@ function generate_keyblocks() {
       if (p%12==key) {
         let xx = 0;
         let yy = canvaHeight-(p-pitchminpart+1)*incrementypart;
-        let xe = canvaBuffer.width;
+        let xe = 1;  // normalized width (full width)
         let ye = incrementypart;
         let keyblock = new NoteRectangle(xx,yy,xe,ye, "tonic", "score");
         keyblock.col = default_colors.keyblock_tonic;
@@ -255,7 +255,7 @@ function generate_keyblocks() {
       if (p%12==(key+7)%12) {
         let xx = 0;
         let yy = canvaHeight-(p-pitchminpart+1)*incrementypart;
-        let xe = canvaBuffer.width;
+        let xe = 1;  // normalized width (full width)
         let ye = incrementypart;
         let keyblock = new NoteRectangle(xx,yy,xe,ye, "fifth", "score");
         keyblock.col = default_colors.keyblock_fifth;
