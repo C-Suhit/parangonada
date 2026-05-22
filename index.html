@@ -8,6 +8,7 @@
     <script  type="text/javascript" src="static/control.js"></script>
     <script  type="text/javascript" src="static/drawing.js"></script>
     <script  type="text/javascript" src="static/display_classes.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script  type="text/javascript" src="static/sketch.js"></script>
     
   </head>
@@ -29,12 +30,12 @@
 
         <div id="info_buttons">
           <div id="feature_csv">
-            <div>Upload csv files</div>
+            <div>Upload csv files or a zip of csv files</div>
             <input type="file"
             multiple
             id="csv_input"
-            name="csv_input" 
-            accept=".csv">
+            name="csv_input"
+            accept=".csv,.zip">
           </div>
         </div>
 

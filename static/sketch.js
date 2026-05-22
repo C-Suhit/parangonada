@@ -126,20 +126,91 @@ img.updatePixels();
 
 //________________- upload files -__________________________
 
+const REQUIRED_CSVS = ["align.csv", "feature.csv", "part.csv", "ppart.csv", "zalign.csv"];
+
+/**
+ * Extract the 5 required CSV files from a ZIP blob using JSZip.
+ * Returns a Map<filename, csvBlob> on success, or null if any required file is missing.
+ */
+async function extract_csvs_from_zip(zipBlob) {
+  try {
+    const zip = await JSZip.loadAsync(zipBlob);
+    const csvMap = new Map();
+    const missing = [];
+    for (const name of REQUIRED_CSVS) {
+      const entry = zip.file(name);
+      if (entry) {
+        csvMap.set(name, entry.async("blob"));
+      } else {
+        missing.push(name);
+      }
+    }
+    if (missing.length > 0) {
+      alert("The ZIP file is missing the following required CSV files:\n" + missing.join(", "));
+      return null;
+    }
+    // Resolve all blobs
+    const resolved = new Map();
+    for (const [name, blobPromise] of csvMap) {
+      resolved.set(name, await blobPromise);
+    }
+    return resolved;
+  } catch (e) {
+    alert("Error reading ZIP file: " + e.message);
+    return null;
+  }
+}
+
 function redraw_with_new_files() {
   //console.log("get here before loading");
 
+  const files = document.getElementById('csv_input').files;
+
+  // --- ZIP path: if any selected file is a .zip, extract CSVs from it ---
+  const zipFile = Array.from(files).find(f => f.name.toLowerCase().endsWith('.zip'));
+  if (zipFile) {
+    extract_csvs_from_zip(zipFile).then(csvMap => {
+      if (!csvMap) return; // alert already shown by extract_csvs_from_zip
+      const urls = {};
+      for (const name of REQUIRED_CSVS) {
+        urls[name] = URL.createObjectURL(csvMap.get(name));
+      }
+      Promise.allSettled([
+        new Promise((res) => { loadTable(urls["ppart.csv"], 'csv', 'header', callback = res) }),
+        new Promise((res) => { loadTable(urls["part.csv"], 'csv', 'header', callback = res) }),
+        new Promise((res) => { loadTable(urls["align.csv"], 'csv', 'header', callback = res) }),
+        new Promise((res) => { loadTable(urls["zalign.csv"], 'csv', 'header', callback = res) }),
+        new Promise((res) => { loadTable(urls["feature.csv"], 'csv', 'header', callback = res) })
+      ])
+      .then(values => {
+        table       = values[0]["value"];
+        tablepart   = values[1]["value"];
+        alignment   = values[2]["value"];
+        zalignment  = values[3]["value"];
+        feature     = values[4]["value"];
+        console.log("starting the drawing now (from zip)!", values);
+        reset_position();
+        reset_player();
+        setup_score_and_performance();
+        align_slider_update();
+      })
+      .catch(errors => { err = errors; alert("error loading one of the extracted CSV files"); });
+    });
+    return;
+  }
+
+  // --- CSV path: original behaviour unchanged ---
   let file_names = {"align.csv":0, "feature.csv":1, "part.csv":2, "ppart.csv":3, "zalign.csv":4};
-  for (let i = 0; i< document.getElementById('csv_input').files.length; i++) {
-    file_names[document.getElementById('csv_input').files[i].name] = i;
-    //console.log(document.getElementById('csv_input').files[i].name, i);
+  for (let i = 0; i< files.length; i++) {
+    file_names[files[i].name] = i;
+    //console.log(files[i].name, i);
   }
   Promise.allSettled([
-    new Promise((res) => {loadTable(URL.createObjectURL(document.getElementById('csv_input').files[0]), 'csv', 'header', callback = res)}),
-    new Promise((res) => {loadTable(URL.createObjectURL(document.getElementById('csv_input').files[1]), 'csv', 'header', callback = res)}),
-    new Promise((res) => {loadTable(URL.createObjectURL(document.getElementById('csv_input').files[2]), 'csv', 'header', callback = res)}),
-    new Promise((res) => {loadTable(URL.createObjectURL(document.getElementById('csv_input').files[3]), 'csv', 'header', callback = res)}),
-    new Promise((res) => {loadTable(URL.createObjectURL(document.getElementById('csv_input').files[4]), 'csv', 'header', callback = res)})
+    new Promise((res) => {loadTable(URL.createObjectURL(files[0]), 'csv', 'header', callback = res)}),
+    new Promise((res) => {loadTable(URL.createObjectURL(files[1]), 'csv', 'header', callback = res)}),
+    new Promise((res) => {loadTable(URL.createObjectURL(files[2]), 'csv', 'header', callback = res)}),
+    new Promise((res) => {loadTable(URL.createObjectURL(files[3]), 'csv', 'header', callback = res)}),
+    new Promise((res) => {loadTable(URL.createObjectURL(files[4]), 'csv', 'header', callback = res)})
   ])
   .then(values =>
     { table = values[file_names["ppart.csv"]]["value"];
@@ -154,10 +225,8 @@ function redraw_with_new_files() {
       align_slider_update();
     })
   .catch(errors => {err = errors; alert("error loading one of the uploaded files");})
-
-
-  
 }
+
 
 //________________- SETUP -__________________________
 
